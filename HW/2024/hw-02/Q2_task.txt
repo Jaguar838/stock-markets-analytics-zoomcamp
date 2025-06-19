@@ -1,0 +1,153 @@
+Допиши наступне завдання(вже запропонований код залиш без змін):
+## Стратегія інвестування "Утримання кожної акції Х фіксованих днів після IPO(2023, 2024)"
+Припустимо, вам вдалося купити нову акцію (зареєстровану на IPO) в перший день за ціною [Adj Close]. Ваша стратегія полягає в тому, щоб утримувати рівно X повних днів (де X знаходиться від 1 до 30) і продавати за ціною "Adj. Close" протягом X днів (наприклад, якщо X = 1, ви продаєте наступного дня).
+Знайдіть X, коли квантильне зростання на 75% (серед 152 інвестицій IPO2023) є найвищим. 
+### Отримання даних з Інтернету
+
+Отримати список IPO за 2023 та 2024 роки з наступними URL-адресами: 
+- [https://stockanalysis.com/ipos/2023/](https://stockanalysis.com/ipos/2023/)
+- [https://stockanalysis.com/ipos/2024/](https://stockanalysis.com/ipos/2024/)
+Отримайте всі денні ціни OHLCV на всі акції з "датою IPO" до 1 березня 2024 року . 
+
+### Обробка даних
+
+1. Іноді може знадобитися змінити назву символу (наприклад, "IBAC" на stockanalysis.com -> "IBACU" у Yahoo Finance), щоб знайти ціни OHLCV для всіх акцій. Деякі тікери, такі як «DYCQ» і «LEGT», були на ринку менше 30 днів (11 і 21 день відповідно). Залишимо їх у наборі даних; Це просто означає, що ви не могли утримувати їх більше днів, ніж вони були перераховані.
+2. Знайдіть всі денні ціни 'Adj Close' для кожної акції з "датою IPO" до 1 березня 2024 року ("< 2024-03-01") - 183 тікери (без "RYZB" та "PTHR").
+Видаліть "RYZB", оскільки він більше не доступний у Фінансах Yahoo.
+3. Уточніть дати IPO по данним сайту Yahoo Finance та створіть таблицею min_dates (перший день, коли кожна акція має дані на Yahoo Finance)
+4. Створіть 30 додаткових стовпців: growth_future_1d ... growth_future_30d.
+5. Об'єднайте отримані раніше стовпці з таблицею min_dates і виконайте векторні операції з отриманим набором даних.
+
+### Знайдення оптимального X
+
+1. Визначте оптимальну кількість днів X (від 1 до 30), де квантильне зростання на 75% є найвищим.
+2. Порівняйте середню та медіанну прибутковість за 2023 рік.
+3. Визначте розподіл інших повернень 25-50-75% квантилів.
+4. Порівняйте середню прибутковість у 2024 році з даними за 2023 рік.
+
+### Висновки
+1. Рекомендація щодо використання стратегії для оптимального X.
+2. Порівняння середньої та медіанної прибутковості за 2023 рік.
+3. Порівняння середньої та медіанної прибутковості за 2024 рік.
+4. Порівняння середньої прибутковості у 2024 році з 2023.
+
+### Отримання даних з Інтернету
+
+# Функція для вилучення даних IPO з URL-адреси
+def extract_ipo_data(url):
+   response = requests.get(url, headers=headers)
+   # Wrap the response text in a StringIO object
+   content = StringIO(response.text)
+   # Read the HTML tables using read_html
+   ipo_dfs = pd.read_html(content)
+   return ipo_dfs[0]
+
+# Headers for requests
+headers = {
+   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3',
+}
+# URL-адреси для отримання даних IPO
+url_2023 = "https://stockanalysis.com/ipos/2023/"
+url_2024 = "https://stockanalysis.com/ipos/2024/"
+# Завантаження даних IPO за 2023 та 2024 роки
+ipo_2023_df = extract_ipo_data(url_2023)
+ipo_2024_df = extract_ipo_data(url_2024)
+
+### Обробка даних
+
+# convert to datetime
+def convert_columns(df):
+   # Конвертує 'IPO Date'
+   formats = ['mixed', '%m/%d/%Y', '%d-%b-%Y', None]
+   for fmt in formats:
+       try:
+           df['IPO Date'] = pd.to_datetime(df['IPO Date'], format=fmt)
+           break
+       except ValueError:
+           continue
+   # Усуває дефіси та перетворює на верхній регістр
+   df['Symbol'] = df['Symbol'].str.replace('-', '').str.upper()
+   return df
+
+
+
+# Type Casting даних IPO за 2023 та 2024 роки
+ipo_2023_df = convert_columns(ipo_2023_df)
+ipo_2024_df = convert_columns(ipo_2024_df)
+
+### 1) Обробка даних IPO в рядку 'Symbol':
+
+def process_symbol_column(df):
+   # Зіставлення символів
+   symbol_mapping = {
+
+       'IBAC': 'IBACU', # Приклад
+
+       # Додайте інші відповідності тут
+
+   }
+   # Список небажаних тікетів
+   symbols_to_drop = ['RYZB', 'PTHR'] #, 'JVSA', , 'BUYA', 'BAYA', 'FORL', 'YGFGF', 'LEGT', 'DYCQ']
+   # Видалення рядків, де 'Symbol' є у списку тікетів для вилучення
+   df = df.drop(df[df['Symbol'].isin(symbols_to_drop)].index)
+   # Заміна символів за зіставленням
+   df['Symbol'] = df['Symbol'].replace(symbol_mapping)
+   return df.loc[df['IPO Date'] <= '2024-03-01']
+
+
+
+# Filter даних в рядку 'Symbol' IPO за 2023 та 2024 роки
+ipo_2023_df = process_symbol_column(ipo_2023_df)
+ipo_2024_df = process_symbol_column(ipo_2024_df)
+
+### 2) Знайдіть всі денні ціни 'Adj Close' для кожної акції
+
+def get_daily_prices(ipo_df):
+   # Отримати масив символів з датафрейму IPO
+   symbols = ipo_df['Symbol'].tolist()[::-1]
+   # Отримати всі денні ціни 'Adj Close' для вказаних символів
+   stocks_df = yf.download(" ".join(symbols), period='max', interval="1d")['Adj Close']
+   start=ipo_df['IPO Date'].min()
+   end=ipo_df['IPO Date'].max()
+   return start, end, symbols, stocks_df.query('index >= @start')
+
+
+# Приклад використання
+st_ipo_2023, end_ipo_2023, symbols_2023, daily_prices_df2023 = get_daily_prices(ipo_2023_df)
+st_ipo_2024, end_ipo_2024, symbols_2024, daily_prices_df2024 = get_daily_prices(ipo_2024_df)
+
+
+def print_ipo_info(st_ipo, end_ipo, symbols, year):
+   print(f"Стартова дата відліку IPO{year}: {st_ipo.strftime('%Y-%m-%d')} для тикера {symbols[0]}")
+   print(f"Остання дата відліку IPO{year}: {end_ipo.strftime('%Y-%m-%d')} для тикера {symbols[-1]} \n")
+
+
+# Виклик функції для IPO 2023
+
+print_ipo_info(st_ipo_2023, end_ipo_2023, symbols_2023, '2023')
+# Виклик функції для IPO 2024
+print_ipo_info(st_ipo_2024, end_ipo_2024, symbols_2024, '2024')
+daily_prices_df2023['IROH'].info()
+daily_prices_df2024['DYCQ'].info()
+
+### 3) Уточніть дати IPO по данним сайту Yahoo Finance та створіть таблицю min_dates (перший день, коли кожна акція має дані на Yahoo Finance)
+
+def get_min_dates(daily_prices_df):
+   min_dates = []
+   for ticker in daily_prices_df.columns:
+       # Шукаємо перший непорожній рядок у стовпці
+       ipo_date = daily_prices_df[ticker].first_valid_index()
+       min_dates.append({'ticker': ticker, 'ipo_date': ipo_date})
+   return pd.DataFrame(min_dates)
+
+
+# перший день, коли кожна акція має дані на Yahoo Finance за 2023 та 2024 роки
+min_ipo_dates_2023_df = get_min_dates(daily_prices_df2023)
+min_ipo_dates_2024_df = get_min_dates(daily_prices_df2024)
+min_ipo_dates_2023_df
+min_ipo_dates_2024_df
+
+### 4) Створюємо 30 додаткових стовпців: growth_future_1d ... growth_future_30d
+growth_cols = [f"growth_future_{i}d" for i in range(1, 31)]
+Використай для заповнення стопців growth_future_1d ... growth_future_30d  у датафреймах min_ipo_dates_2023_df та min_ipo_dates_2024_df наступну ф-ю df.assign(**{f"growth_future_{i}d": df[ticker].pct_change(periods=i) for i in range(1, 31)})
+#Продовжи написання коду після цієї строки...
